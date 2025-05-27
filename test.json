@@ -1,0 +1,15 @@
+{
+  "mappings": [
+    {
+      "file_id": 1,
+      "file_name": "SAP 3.xlsx",
+      "sheet_type": "SAP",
+      "sheet_index": 0,
+      "is_validated": true
+    }
+  ],
+  "updated_at": "2025-05-27T13:30:00",
+  "file_type_mappings": {
+    "SAP 3.xlsx": "sap"
+  }
+}

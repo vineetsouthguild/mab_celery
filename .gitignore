@@ -1,0 +1,68 @@
+# Ignore virtual environments
+venv/
+.env/
+ENV/
+env/
+.venv/
+
+# Ignore Python bytecode and cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Ignore environment variable files
+.env
+*.env
+
+# Ignore common IDE/editor config files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# Ignore macOS files
+.DS_Store
+
+# Ignore logs and coverage files
+*.log
+coverage/
+htmlcov/
+.cache/
+
+# Ignore Jupyter Notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore test and debug data
+pytest_cache/
+.pytest_cache/
+*.cover
+
+# Ignore any built distributions
+build/
+dist/
+*.egg-info/
+
+# Ignore databases or local state
+*.sqlite3
+*.db
+
+# Ignore docker-related
+docker-compose.override.yml
+
+# Ignore data files (usually large and not necessary for version control)
+data/raw/
+data/processed/
+data/result/
+data/mapped/
+data/formatted_result/
+data/combined_result/
+
+# Keep the folder structure
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+!data/result/.gitkeep
+!data/mapped/.gitkeep
+!data/formatted_result/.gitkeep
+!data/combined_result/.gitkeep

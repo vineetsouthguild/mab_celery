@@ -1,0 +1,455 @@
+<!-- filepath: /home/vineet/Desktop/test/static/client.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Excel Upload with SSE Status</title>
+  <style>
+    body { 
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      padding: 2rem;
+      max-width: 1200px;
+      margin: 0 auto;
+      color: #333;
+      line-height: 1.5;
+    }
+    h1, h2, h3 { color: #444; }
+    
+    .progress-bar {
+      width: 100%;
+      background-color: #e0e0e0;
+      border-radius: 4px;
+      margin: 10px 0;
+      overflow: hidden;
+      height: 20px;
+    }
+    .progress-bar-fill {
+      height: 100%;
+      background-color: #4caf50;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+      text-align: center;
+      color: white;
+      line-height: 20px;
+      box-shadow: 0 0 5px rgba(76, 175, 80, 0.5);
+    }
+    
+    .card {
+      background: #fff;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+      box-shadow: 0 0 5px rgba(0,0,0,0.05);
+    }
+    th, td {
+      border: 1px solid #eee;
+      padding: 10px;
+      text-align: left;
+    }
+    th {
+      background-color: #f7f7f7;
+      position: sticky;
+      top: 0;
+      font-weight: 600;
+    }
+    tr:nth-child(even) {
+      background-color: #f9f9f9;
+    }
+    
+    .upload-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    
+    button {
+      background-color: #4CAF50;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      transition: all 0.2s ease;
+    }
+    button:hover {
+      background-color: #45a049;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.15);
+    }
+    
+    .status-message {
+      font-style: italic;
+      color: #666;
+      margin: 5px 0;
+    }
+    
+    .stats-box {
+      background-color: #f9f9f9;
+      border-radius: 4px;
+      padding: 15px;
+      margin-top: 15px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 15px;
+    }
+    
+    .stat-item {
+      background: #fff;
+      padding: 10px;
+      border-radius: 4px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    
+    .stat-item h4 {
+      margin: 0 0 5px 0;
+    }
+    
+    .error-message {
+      color: #d32f2f;
+      background-color: #ffebee;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+      border-left: 4px solid #d32f2f;
+    }
+    
+    .cached-message {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+      padding: 10px;
+      border-radius: 4px;
+      margin: 10px 0;
+      font-weight: bold;
+      border-left: 4px solid #2e7d32;
+    }
+    
+    /* Improve file input styling */
+    input[type="file"] {
+      border: 1px solid #ddd;
+      padding: 8px;
+      border-radius: 4px;
+      background: #f9f9f9;
+    }
+    
+    /* Add pulsing animation for loading states */
+    @keyframes pulse {
+      0% { opacity: 0.7; }
+      50% { opacity: 1; }
+      100% { opacity: 0.7; }
+    }
+    .loading {
+      animation: pulse 1.5s infinite;
+    }
+    
+    .data-preview {
+      max-height: 400px;
+      overflow-y: auto;
+      border: 1px solid #eee;
+      border-radius: 4px;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Excel File Processor</h1>
+    <div class="upload-container">
+      <input type="file" id="file-input" accept=".xls,.xlsx" />
+      <button id="upload-btn">Upload &amp; Process</button>
+    </div>
+  </div>
+
+  <div id="status-container" class="card">
+    <h2>Current Status</h2>
+    <div id="status">–– waiting for upload ––</div>
+    <div class="progress-bar">
+      <div id="progress-bar-fill" class="progress-bar-fill" style="width: 0%">0%</div>
+    </div>
+    <div id="status-message" class="status-message"></div>
+    <div id="summary"></div>
+    <div id="preview-container" style="display: none;">
+      <h3>Data Preview</h3>
+      <div id="preview-table" class="data-preview"></div>
+    </div>
+  </div>
+
+  <script>
+    // Optimized JavaScript with better error handling and performance
+    const uploadBtn = document.getElementById('upload-btn');
+    const fileInput = document.getElementById('file-input');
+    const status = document.getElementById('status');
+    const progressBarFill = document.getElementById('progress-bar-fill');
+    const statusMessage = document.getElementById('status-message');
+    const summaryDiv = document.getElementById('summary');
+    const previewContainer = document.getElementById('preview-container');
+    const previewTable = document.getElementById('preview-table');
+    
+    // For better performance, use event delegation
+    document.addEventListener('DOMContentLoaded', () => {
+      // Initialize
+      resetUI();
+      
+      // Listen for file selection to enable/disable upload button
+      fileInput.addEventListener('change', () => {
+        uploadBtn.disabled = !fileInput.files.length;
+      });
+      
+      // Handle upload
+      uploadBtn.addEventListener('click', handleUpload);
+    });
+    
+    function resetUI() {
+      status.textContent = '–– waiting for upload ––';
+      statusMessage.textContent = '';
+      progressBarFill.style.width = '0%';
+      progressBarFill.textContent = '0%';
+      progressBarFill.style.backgroundColor = '#4caf50';
+      summaryDiv.innerHTML = '';
+      previewContainer.style.display = 'none';
+      previewTable.innerHTML = '';
+    }
+    
+    async function handleUpload(e) {
+      e.preventDefault();
+      
+      const file = fileInput.files[0];
+      if (!file) {
+        status.textContent = '❗ Please choose a file first.';
+        return;
+      }
+      
+      // Reset UI
+      resetUI();
+      
+      // Show initial uploading status
+      status.textContent = 'Uploading...';
+      status.classList.add('loading');
+      
+      try {
+        // Prepare form data
+        const formData = new FormData();
+        formData.append('file', file);
+
+        // POST to /upload and get back a streaming response
+        const response = await fetch('/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Server responded with status ${response.status}`);
+        }
+
+        // Reader for the streamed body - optimized for performance
+        await processStreamResponse(response);
+        
+      } catch (error) {
+        console.error('Upload error:', error);
+        status.classList.remove('loading');
+        status.textContent = '❌ Error';
+        statusMessage.innerHTML = `<div class="error-message">Upload failed: ${error.message}</div>`;
+        progressBarFill.style.backgroundColor = '#d32f2f';
+      }
+    }
+    
+    async function processStreamResponse(response) {
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder('utf-8');
+      let buffer = '';
+      
+      try {
+        // Read in a loop
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          // Split on SSE delimiter
+          const parts = buffer.split('\n\n');
+          buffer = parts.pop();  // keep the last (possibly incomplete) chunk
+
+          // Process each complete message
+          for (const part of parts) {
+            if (part.startsWith('data: ')) {
+              const jsonStr = part.slice(6);
+              try {
+                const obj = JSON.parse(jsonStr);
+                console.log("Received SSE event:", obj);  // Log events for debugging
+                handleStatusUpdate(obj);
+              } catch (e) {
+                console.error('Error parsing JSON:', e, jsonStr);
+              }
+            }
+          }
+        }
+        
+        // Process any remaining data
+        if (buffer.startsWith('data: ')) {
+          try {
+            const obj = JSON.parse(buffer.slice(6));
+            handleStatusUpdate(obj);
+          } catch (e) {
+            console.error('Error parsing final JSON:', e);
+          }
+        }
+        
+        status.classList.remove('loading');
+        
+      } catch (error) {
+        console.error('Stream processing error:', error);
+        status.classList.remove('loading');
+        status.textContent = '❌ Error';
+        statusMessage.innerHTML = `<div class="error-message">Stream processing failed: ${error.message}</div>`;
+      }
+    }
+    
+    function handleStatusUpdate(obj) {
+      console.log("Processing status update:", obj);
+      
+      // Update progress bar if percentage is provided
+      if (obj.percentage !== undefined) {
+        progressBarFill.style.width = `${obj.percentage}%`;
+        progressBarFill.textContent = `${obj.percentage}%`;
+      }
+      
+      // Update status message if provided
+      if (obj.message) {
+        statusMessage.textContent = obj.message;
+      }
+      
+      // Remove loading animation when done or error
+      if (obj.status === 'done' || obj.status === 'error') {
+        status.classList.remove('loading');
+      } else {
+        status.classList.add('loading');
+      }
+      
+      // Handle different status types
+      switch (obj.status) {
+        case 'error':
+          status.textContent = `❌ Error`;
+          statusMessage.innerHTML = `<div class="error-message">${obj.message || 'An unknown error occurred'}</div>`;
+          progressBarFill.style.backgroundColor = '#d32f2f';
+          break;
+          
+        case 'uploaded':
+          status.textContent = `🔄 Uploaded: ${obj.filename}`;
+          break;
+          
+        case 'saving':
+          status.textContent = `💾 Saving file`;
+          break;
+          
+        case 'reading':
+          status.textContent = `📖 Reading file`;
+          break;
+          
+        case 'processing':
+          status.textContent = `⚙️ Processing data`;
+          break;
+          
+        case 'done':
+          status.textContent = `✅ Processing complete!`;
+          
+          if (obj.cached) {
+            summaryDiv.innerHTML = `<div class="cached-message">Results loaded from cache for faster response</div>`;
+          }
+          
+          if (obj.summary) {
+            console.log("Displaying summary:", obj.summary);
+            displaySummary(obj.summary);
+          }
+          if (obj.preview) {
+            console.log("Displaying preview:", obj.preview);
+            displayPreview(obj.preview);
+          }
+          break;
+        
+        default:
+          console.log("Unhandled status:", obj.status);
+          break;
+      }
+    }
+    
+    function displaySummary(summary) {
+      console.log("Display summary called with:", summary);
+      
+      // Handle both formats - direct stats or nested stats
+      const stats = summary.stats || summary;
+      
+      let statsHtml = `
+      <div class="stats-box">
+        <div class="stat-item">
+          <h4>Rows:</h4>
+          <div>${summary.total_rows || stats.final_rows || 0}</div>
+        </div>
+        <div class="stat-item">
+          <h4>Columns:</h4>
+          <div>${summary.total_columns || stats.final_cols || 0}</div>
+        </div>
+        <div class="stat-item">
+          <h4>Original Rows:</h4>
+          <div>${stats.initial_rows || 0}</div>
+        </div>
+        <div class="stat-item">
+          <h4>Time:</h4>
+          <div>${summary.processing_time || stats.processing_time_seconds || 'N/A'} seconds</div>
+        </div>`;
+      
+      if (stats.empty_rows_removed > 0) {
+        statsHtml += `
+        <div class="stat-item">
+          <h4>Empty Rows Removed:</h4>
+          <div>${stats.empty_rows_removed}</div>
+        </div>`;
+      }
+      
+      if (Object.keys(stats.duplicate_columns || {}).length > 0) {
+        statsHtml += `
+        <div class="stat-item">
+          <h4>Duplicate Columns:</h4>
+          <div>${Object.keys(stats.duplicate_columns).length} found and renamed</div>
+        </div>`;
+      }
+      
+      statsHtml += `</div>`;
+      summaryDiv.innerHTML = statsHtml;
+    }
+    
+    function displayPreview(preview) {
+      if (!preview || !preview.length) return;
+      
+      previewContainer.style.display = 'block';
+      
+      // Create table headers
+      const columns = Object.keys(preview[0]);
+      let tableHtml = '<table><thead><tr>';
+      columns.forEach(col => {
+        tableHtml += `<th>${col}</th>`;
+      });
+      tableHtml += '</tr></thead><tbody>';
+      
+      // Add data rows
+      preview.forEach(row => {
+        tableHtml += '<tr>';
+        columns.forEach(col => {
+          tableHtml += `<td>${row[col] !== null ? row[col] : ''}</td>`;
+        });
+        tableHtml += '</tr>';
+      });
+      
+      tableHtml += '</tbody></table>';
+      previewTable.innerHTML = tableHtml;
+    }
+  </script>
+</body>
+</html>
