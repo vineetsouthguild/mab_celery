@@ -438,6 +438,52 @@ class FileProcessor:
         elif file_type == 'csv':
             output_path = os.path.join(self.result_folder, f"result_{filename}.csv")
             df.to_csv(output_path, index=False)
+        elif file_type == 'parquet':
+            output_path = os.path.join(self.result_folder, f"result_{filename}.parquet")
+            df.to_parquet(output_path, index=False)
         else:
-            raise ValueError("Unsupported file type. Choose 'excel' or 'csv'.")
+            raise ValueError("Unsupported file type. Choose 'excel', 'csv', or 'parquet'.")
         return output_path
+        
+    @timing_decorator
+    def convert_to_parquet_and_upload(self, df: pd.DataFrame, project_id: int, sheet_type: str) -> str:
+        """
+        Convert DataFrame to parquet and upload to Digital Ocean Spaces
+        
+        Args:
+            df: Preprocessed pandas DataFrame to upload
+            project_id: Project ID from frontend
+            sheet_type: Type of sheet from frontend
+        
+        Returns:
+            str: The space_link URL of the uploaded file
+        """
+        from utils.spaces import DOSpacesHandler
+        
+        self.logger.info(f"Converting DataFrame to parquet and uploading to DO Spaces for project {project_id}, sheet_type {sheet_type}")
+        
+        if df is None or df.empty:
+            self.logger.error("Cannot upload empty DataFrame")
+            raise ValueError("Cannot upload empty DataFrame")
+        
+        try:
+            # Create DO Spaces handler
+            spaces_handler = DOSpacesHandler()
+            
+            # Upload DataFrame as parquet
+            upload_result = spaces_handler.upload_dataframe_as_parquet(
+                df=df,
+                project_id=project_id,
+                sheet_type=sheet_type,
+                folder_path="processed_data"
+            )
+            
+            # Return the file URL to be stored in the database
+            space_link = upload_result["file_url"]
+            self.logger.info(f"Successfully uploaded parquet file to DO Spaces: {space_link}")
+            
+            return space_link
+            
+        except Exception as e:
+            self.logger.error(f"Error converting and uploading to DO Spaces: {str(e)}")
+            raise

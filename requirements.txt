@@ -2,3 +2,8 @@ celery
 redis
 fastapi
 uvicorn[standard]
+boto3
+pyarrow
+pandas
+fastexcel
+python-dotenv

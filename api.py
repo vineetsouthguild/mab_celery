@@ -61,9 +61,20 @@ def sse_event(event: str, data: dict):
 
 
 @app.post("/upload")
-async def upload(file: UploadFile = File(...)):
+async def upload(
+    file: UploadFile = File(...),
+    project_id: int = None,
+    sheet_type: str = None
+):
     contents = await file.read()
     filename = file.filename
+    project_id = 39  # hardcoded for testing, replace with actual logic
+    sheet_type = "SAP"
+    if not project_id or not sheet_type:
+        raise HTTPException(
+            status_code=400, 
+            detail="Both project_id and sheet_type are required for processing and storing in DO Spaces"
+        )
 
     # 1) save to disk
     file_path = processor.save_uploaded_file(contents, filename)
@@ -73,14 +84,15 @@ async def upload(file: UploadFile = File(...)):
     mapping = get_file_mapping(app_state, filename)
     sheet_index = mapping.sheet_index
 
-    # 3) enqueue a Celery job
-    task = process_file.delay(file_path, sheet_index)
+    # 3) enqueue a Celery job with project_id and sheet_type
+    task = process_file.delay(file_path, sheet_index, project_id, sheet_type)
 
     # 4) stream back status via SSE
     async def event_stream():
         # initial queued event
-        yield sse_event("queued",      {"status": "uploaded", "task_id": task.id, "percentage": 10, "filename": filename})
-        yield sse_event("started",     {"status": "reading", "task_id": task.id, "percentage": 20})
+        yield sse_event("queued", {"status": "uploaded", "task_id": task.id, "percentage": 10, "filename": filename})
+        
+        yield sse_event("started", {"status": "reading", "task_id": task.id, "percentage": 20})
 
         while True:
             res = AsyncResult(task.id)
@@ -96,17 +108,18 @@ async def upload(file: UploadFile = File(...)):
 
             if state == "SUCCESS":
                 payload = res.result or {}
-                yield sse_event("done",      {
+                yield sse_event("done", {
                     "status": "done",
                     "task_id": task.id,
                     "percentage": 100,
                     "preview": payload.get("preview", []),
                     "summary": payload.get("summary", {}),
+                    "space_link": payload.get("summary", {}).get("space_link")
                 })
                 break
 
             if state == "FAILURE":
-                yield sse_event("error",     {
+                yield sse_event("error", {
                     "status": "error",
                     "task_id": task.id,
                     "message": str(res.result),
